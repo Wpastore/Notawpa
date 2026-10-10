@@ -641,8 +641,15 @@ async function sinkronDariFirebase(munculkanNotif = true) {
             qSnap.forEach((d) => {
                 let p = d.data(); p.id = d.id; baru.push(p);
             });
+            
             if (baru.length > 0) {
-                produkDB = baru;
+                produkDB = baru; // Update tampilan di layar
+                
+                // --- KODE BARU: Simpan data dari Firebase secara permanen ke Dexie lokal ---
+                await db.produk.clear();       // Hapus data lokal lama agar tidak dobel
+                await db.produk.bulkPut(baru); // Masukkan semua data baru dari Firebase ke Dexie
+                // --------------------------------------------------------------------------
+                
                 renderTabelManajemen();
                 if(munculkanNotif) showNotif(`Berhasil menarik ${baru.length} produk dari Firebase`, "success");
             } else {
