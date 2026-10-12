@@ -65,7 +65,6 @@
             display: none;
             margin-top: 10px;
         }
-        /* Canvas digunakan untuk meresize dan menampilkan gambar */
         canvas {
             max-width: 100%;
             border: 1px solid #ddd;
@@ -97,7 +96,7 @@
 
     <div class="container">
         <h2>Cetak Foto Transaksi</h2>
-        <p class="info">Otomatis Resize ke Kertas 58mm (384px)</p>
+        <p class="info">Sistem Otomatis Resize (58mm)</p>
         
         <div class="upload-section">
             <label class="upload-btn" for="inputFoto">
@@ -107,7 +106,6 @@
             
             <div id="previewContainer">
                 <p style="font-size: 12px; color: #555; margin: 0 0 5px 0;">Pratinjau Hasil Cetak:</p>
-                <!-- Gambar akan digambar ulang di dalam canvas ini -->
                 <canvas id="canvasPreview"></canvas>
             </div>
         </div>
@@ -116,7 +114,6 @@
     </div>
 
     <script>
-        // Variabel untuk menyimpan data gambar yang sudah diproses
         var dataGambarBase64 = "";
 
         function prosesGambar(event) {
@@ -130,30 +127,25 @@
                     var canvas = document.getElementById('canvasPreview');
                     var ctx = canvas.getContext('2d');
                     
-                    // --- LOGIKA RESIZE UNTUK PRINTER 58MM ---
-                    // Lebar maksimal area cetak printer 58mm adalah 384 titik (pixel).
-                    // Kita kunci lebarnya di 384px agar tidak memberatkan memori HP dan Intent.
+                    // Batas lebar ukuran kertas 58mm adalah 384px.
                     var maxWidth = 384; 
                     
-                    // Hitung skala tinggi gambar agar tetap proporsional (tidak gepeng)
                     var scale = maxWidth / img.width;
                     var newHeight = Math.round(img.height * scale);
                     
                     canvas.width = maxWidth;
                     canvas.height = newHeight;
                     
-                    // Beri warna dasar putih (mencegah background hitam jika ada transparansi)
+                    // Beri latar belakang putih murni
                     ctx.fillStyle = "#FFFFFF";
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                     
-                    // Gambar ulang foto ke dalam canvas dengan ukuran baru
+                    // Proses gambar ulang
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     
-                    // Ubah canvas menjadi format data URL (JPEG, kualitas 80%)
-                    // Kualitas 80% sudah sangat cukup untuk printer thermal hitam-putih
-                    dataGambarBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                    // Ekspor menjadi base64 tanpa kompresi berat
+                    dataGambarBase64 = canvas.toDataURL('image/jpeg', 0.9);
                     
-                    // Tampilkan area pratinjau dan aktifkan tombol cetak
                     document.getElementById('previewContainer').style.display = 'block';
                     document.getElementById('btnCetak').disabled = false;
                 }
@@ -168,11 +160,10 @@
                 return;
             }
             
-            // Aplikasi RawBT otomatis mengenali format string "data:image/jpeg;base64,..." 
-            // dan akan langsung mencetaknya sebagai gambar grafis, bukan sebagai teks.
-            var intentUrl = "intent:" + encodeURIComponent(dataGambarBase64) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;";
+            // PERBAIKAN: 
+            // Tidak lagi menggunakan encodeURIComponent agar struktur `data:image/jpeg;base64,` terbaca sempurna oleh RawBT
+            var intentUrl = "intent:" + dataGambarBase64 + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;";
             
-            // Buka aplikasi RawBT
             window.location.href = intentUrl;
         }
     </script>
