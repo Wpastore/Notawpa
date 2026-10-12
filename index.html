@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cetak Gambar Transaksi WPA SHOP</title>
+    <title>Cetak Teks Transaksi WPA SHOP</title>
+    
+    <!-- Library Tesseract.js untuk membaca teks dari foto -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     
     <style>
         body {
@@ -56,7 +59,6 @@
             display: inline-block;
             margin-bottom: 10px;
             font-weight: bold;
-            width: 90%;
         }
         .upload-btn:active {
             background-color: #0056b3;
@@ -65,11 +67,33 @@
             display: none;
             margin-top: 10px;
         }
-        canvas {
+        #previewFoto {
             max-width: 100%;
-            border: 1px solid #ddd;
+            max-height: 150px;
             border-radius: 5px;
-            background-color: #fff;
+            border: 1px solid #ddd;
+            object-fit: contain;
+        }
+        #statusOCR {
+            font-size: 13px;
+            color: #d35400;
+            font-weight: bold;
+            margin-top: 10px;
+            display: none;
+        }
+        textarea {
+            width: 100%;
+            height: 330px;
+            font-family: 'Courier New', Courier, monospace; /* Wajib monospace agar spasi sejajar */
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            resize: none;
+            margin-bottom: 20px;
+            line-height: 1.2;
+            background-color: #fdfdfd;
         }
         .print-btn {
             width: 100%;
@@ -81,7 +105,6 @@
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
-            margin-top: 10px;
         }
         .print-btn:active {
             background-color: #218838;
@@ -95,74 +118,174 @@
 <body>
 
     <div class="container">
-        <h2>Cetak Foto Transaksi</h2>
-        <p class="info">Sistem Otomatis Resize (58mm)</p>
+        <h2>Cetak Teks WPA SHOP</h2>
+        <p class="info">Hasil Ekstrak Teks Lebih Tajam (58mm)</p>
         
         <div class="upload-section">
             <label class="upload-btn" for="inputFoto">
-                📁 Pilih Foto Transaksi
+                📁 Upload Foto Transaksi
             </label>
-            <input type="file" id="inputFoto" accept="image/*" onchange="prosesGambar(event)">
+            <input type="file" id="inputFoto" accept="image/*" onchange="prosesFoto(event)">
             
             <div id="previewContainer">
-                <p style="font-size: 12px; color: #555; margin: 0 0 5px 0;">Pratinjau Hasil Cetak:</p>
-                <canvas id="canvasPreview"></canvas>
+                <img id="previewFoto" src="" alt="Pratinjau">
             </div>
+            
+            <div id="statusOCR">Menyiapkan pemindai...</div>
         </div>
 
-        <button id="btnCetak" class="print-btn" onclick="cetakGambarKeRawBT()" disabled>🖨️ Cetak Gambar via RawBT</button>
+        <textarea id="strukText">
+Silakan upload foto transaksi. 
+Teks akan diekstrak ke sini...
+</textarea>
+
+        <button id="btnCetak" class="print-btn" onclick="cetakKeRawBT()">🖨️ Cetak Teks via RawBT</button>
     </div>
 
     <script>
-        var dataGambarBase64 = "";
+        // Fungsi pembantu untuk mengatur posisi teks di tengah kertas (Maks 32 Karakter)
+        function rataTengah(teks) {
+            var panjangKertas = 32;
+            if (teks.length >= panjangKertas) return teks;
+            var spasiKiri = Math.floor((panjangKertas - teks.length) / 2);
+            return " ".repeat(spasiKiri) + teks;
+        }
 
-        function prosesGambar(event) {
+        function prosesFoto(event) {
             var file = event.target.files[0];
             if (!file) return;
 
             var reader = new FileReader();
             reader.onload = function(e) {
-                var img = new Image();
-                img.onload = function() {
-                    var canvas = document.getElementById('canvasPreview');
-                    var ctx = canvas.getContext('2d');
-                    
-                    // Batas lebar ukuran kertas 58mm adalah 384px.
-                    var maxWidth = 384; 
-                    
-                    var scale = maxWidth / img.width;
-                    var newHeight = Math.round(img.height * scale);
-                    
-                    canvas.width = maxWidth;
-                    canvas.height = newHeight;
-                    
-                    // Beri latar belakang putih murni
-                    ctx.fillStyle = "#FFFFFF";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Proses gambar ulang
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
-                    // Ekspor menjadi base64 tanpa kompresi berat
-                    dataGambarBase64 = canvas.toDataURL('image/jpeg', 0.9);
-                    
-                    document.getElementById('previewContainer').style.display = 'block';
-                    document.getElementById('btnCetak').disabled = false;
-                }
-                img.src = e.target.result;
+                document.getElementById('previewFoto').src = e.target.result;
+                document.getElementById('previewContainer').style.display = 'block';
             }
             reader.readAsDataURL(file);
+
+            var statusElemen = document.getElementById('statusOCR');
+            var textArea = document.getElementById('strukText');
+            var btnCetak = document.getElementById('btnCetak');
+
+            statusElemen.style.display = 'block';
+            statusElemen.style.color = '#d35400';
+            statusElemen.innerText = "Membaca teks dari gambar...";
+            btnCetak.disabled = true;
+            
+            Tesseract.recognize(
+                file,
+                'ind+eng',
+                { 
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            var p = Math.round(m.progress * 100);
+                            statusElemen.innerText = "Mengekstrak data: " + p + "%";
+                        }
+                    } 
+                }
+            ).then(function(result) {
+                var barisTeks = result.data.text.split('\n').map(l => l.trim()).filter(l => l !== '');
+                
+                var namaStr = "............";
+                var rekStr = "............";
+                var nominalStr = "Rp ........";
+                var waktuStr = "............";
+
+                // LOGIKA PEMBACAAN TEKS NOTA SEABANK
+                for (var i = 0; i < barisTeks.length; i++) {
+                    var line = barisTeks[i];
+
+                    // 1. Ambil Waktu Transaksi
+                    if (line.toLowerCase().includes("waktu transaksi")) {
+                        var hapusLabel = line.replace(/waktu transaksi/i, '').trim();
+                        if (hapusLabel.length > 5) {
+                            waktuStr = hapusLabel;
+                        } else if (i + 1 < barisTeks.length) {
+                            waktuStr = barisTeks[i+1];
+                        }
+                    }
+                    
+                    // 2. Ambil Jumlah Transfer
+                    if (line.toLowerCase().includes("jumlah transfer") || line.match(/^Rp\s*[\d\.]+\$/i)) {
+                        var cekNominal = line.match(/Rp\s*[\d\.]+/i);
+                        if (cekNominal) {
+                            nominalStr = cekNominal[0];
+                        } else if (i + 1 < barisTeks.length && barisTeks[i+1].match(/Rp\s*[\d\.]+/i)) {
+                            nominalStr = barisTeks[i+1].match(/Rp\s*[\d\.]+/i)[0];
+                        }
+                    }
+
+                    // 3. Ambil Nama (dari kata "Ke") & Rekening
+                    if (line === "Ke" || line.startsWith("Ke ")) {
+                        var sisaText = line.substring(2).trim();
+                        if (sisaText.length > 2) {
+                            namaStr = sisaText;
+                        } else if (i + 1 < barisTeks.length) {
+                            namaStr = barisTeks[i+1];
+                        }
+                        
+                        for (var j = 1; j <= 2; j++) {
+                            if (i + j < barisTeks.length) {
+                                var rekLine = barisTeks[i+j];
+                                if (rekLine.toLowerCase().includes("bank") || rekLine.includes("*")) {
+                                    rekStr = rekLine;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ==========================================
+                // FILTER PEMBERSIH (Data Cleaning)
+                // ==========================================
+                // Menghilangkan logo/angka di depan nama
+                namaStr = namaStr.replace(/^[^a-zA-Z]+/, '').trim().toUpperCase();
+
+                // Merapikan simbol bintang pada rekening yang sering salah baca
+                var ekstrakRek = rekStr.match(/([A-Za-z\s]+).*?(\d{3,8})\$/);
+                if (ekstrakRek) {
+                    var namaBank = ekstrakRek[1].trim();
+                    var digitAkhir = ekstrakRek[2];
+                    rekStr = namaBank + ": ************" + digitAkhir;
+                } else {
+                    rekStr = rekStr.replace(/[^A-Za-z0-9\:\s\-]/g, '*').replace(/\*+/g, '****');
+                }
+
+                // --- MENYUSUN TEMPLATE TEKS MURNI ---
+                // Header dan Footer otomatis rata tengah menggunakan Spasi
+                var template = 
+`${rataTengah("AGEN WPA SHOP")}
+${rataTengah("GROSIR")}
+${rataTengah("jatisari, senori, tuban")}
+${rataTengah(waktuStr)}
+================================
+No Rek  : ${rekStr}
+Nama    : ${namaStr}
+Jumlah  : ${nominalStr}
+Status  : SUKSES
+================================
+${rataTengah("TERIMAKASIH")}`;
+
+                textArea.value = template;
+                
+                statusElemen.style.color = '#28a745';
+                statusElemen.innerText = "Selesai! Teks siap dicetak.";
+                btnCetak.disabled = false;
+            }).catch(function(err) {
+                statusElemen.style.color = 'red';
+                statusElemen.innerText = "Gagal memproses gambar.";
+                console.error(err);
+                btnCetak.disabled = false;
+            });
         }
 
-        function cetakGambarKeRawBT() {
-            if (!dataGambarBase64) {
-                alert("Harap unggah foto transaksi terlebih dahulu.");
-                return;
-            }
+        function cetakKeRawBT() {
+            var text = document.getElementById('strukText').value;
+            // Tambahkan baris kosong di akhir agar kertas bisa disobek dengan aman
+            var printData = text + "\n\n\n";
             
-            // PERBAIKAN: 
-            // Tidak lagi menggunakan encodeURIComponent agar struktur `data:image/jpeg;base64,` terbaca sempurna oleh RawBT
-            var intentUrl = "intent:" + dataGambarBase64 + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;";
+            // Encode teks dan kirim ke RawBT
+            var intentUrl = "intent:" + encodeURIComponent(printData) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;";
             
             window.location.href = intentUrl;
         }
