@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cetak Transaksi WPA SHOP (Filter Rapi)</title>
+    
+    <!-- Library Tesseract.js untuk OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        p.info {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .upload-section {
+            margin-bottom: 15px;
+            border: 1px dashed #ccc;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .upload-section input[type="file"] {
+            display: none;
+        }
+        .upload-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .upload-btn:active {
+            background-color: #0056b3;
+        }
+        #previewContainer {
+            display: none;
+            margin-top: 10px;
+        }
+        #previewFoto {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            object-fit: contain;
+        }
+        #statusOCR {
+            font-size: 13px;
+            color: #d35400;
+            font-weight: bold;
+            margin-top: 10px;
+            display: none;
+        }
+        textarea {
+            width: 100%;
+            height: 330px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            resize: none;
+            margin-bottom: 20px;
+            line-height: 1.2;
+            background-color: #222;
+            color: #0f0;
+        }
+        .print-btn {
+            width: 100%;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .print-btn:active {
+            background-color: #218838;
+        }
+        .print-btn:disabled {
+            background-color: #94d3a2;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Cetak Struk WPA SHOP</h2>
+        <p class="info">Auto-Format (Filter SeaBank)</p>
+        
+        <div class="upload-section">
+            <label class="upload-btn" for="inputFoto">
+                📁 Upload Foto Transaksi
+            </label>
+            <input type="file" id="inputFoto" accept="image/*" onchange="prosesFoto(event)">
+            
+            <div id="previewContainer">
+                <img id="previewFoto" src="" alt="Pratinjau">
+            </div>
+            
+            <div id="statusOCR">Menyiapkan pemindai...</div>
+        </div>
+
+        <textarea id="strukText">
+Silakan upload foto transaksi. 
+Data akan diekstrak otomatis...
+</textarea>
+
+        <button id="btnCetak" class="print-btn" onclick="cetakKeRawBT()">Cetak via RawBT</button>
+    </div>
+
+    <script>
+        function prosesFoto(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('previewFoto').src = e.target.result;
+                document.getElementById('previewContainer').style.display = 'block';
+            }
+            reader.readAsDataURL(file);
+
+            var statusElemen = document.getElementById('statusOCR');
+            var textArea = document.getElementById('strukText');
+            var btnCetak = document.getElementById('btnCetak');
+
+            statusElemen.style.display = 'block';
+            statusElemen.style.color = '#d35400';
+            statusElemen.innerText = "Membaca teks dari gambar...";
+            btnCetak.disabled = true;
+            
+            Tesseract.recognize(
+                file,
+                'ind+eng',
+                { 
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            var p = Math.round(m.progress * 100);
+                            statusElemen.innerText = "Mengekstrak data: " + p + "%";
+                        }
+                    } 
+                }
+            ).then(function(result) {
+                var barisTeks = result.data.text.split('\n').map(l => l.trim()).filter(l => l !== '');
+                
+                var namaStr = "............";
+                var rekStr = "............";
+                var nominalStr = "Rp ........";
+                var waktuStr = "............";
+
+                for (var i = 0; i < barisTeks.length; i++) {
+                    var line = barisTeks[i];
+
+                    // 1. Waktu Transaksi
+                    if (line.toLowerCase().includes("waktu transaksi")) {
+                        var hapusLabel = line.replace(/waktu transaksi/i, '').trim();
+                        if (hapusLabel.length > 5) {
+                            waktuStr = hapusLabel;
+                        } else if (i + 1 < barisTeks.length) {
+                            waktuStr = barisTeks[i+1];
+                        }
+                    }
+                    
+                    // 2. Jumlah Transfer
+                    if (line.toLowerCase().includes("jumlah transfer") || line.match(/^Rp\s*[\d\.]+\$/i)) {
+                        var cekNominal = line.match(/Rp\s*[\d\.]+/i);
+                        if (cekNominal) {
+                            nominalStr = cekNominal[0];
+                        } else if (i + 1 < barisTeks.length && barisTeks[i+1].match(/Rp\s*[\d\.]+/i)) {
+                            nominalStr = barisTeks[i+1].match(/Rp\s*[\d\.]+/i)[0];
+                        }
+                    }
+
+                    // 3. Nama & Rekening
+                    if (line === "Ke" || line.startsWith("Ke ")) {
+                        var sisaText = line.substring(2).trim();
+                        if (sisaText.length > 2) {
+                            namaStr = sisaText;
+                        } else if (i + 1 < barisTeks.length) {
+                            namaStr = barisTeks[i+1];
+                        }
+                        
+                        for (var j = 1; j <= 2; j++) {
+                            if (i + j < barisTeks.length) {
+                                var rekLine = barisTeks[i+j];
+                                if (rekLine.toLowerCase().includes("bank") || rekLine.includes("*")) {
+                                    rekStr = rekLine;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ==========================================
+                // FILTER PEMBERSIH (Merapikan teks berantakan)
+                // ==========================================
+
+                // Bersihkan Nama: Hapus semua angka dan simbol di awal kalimat, lalu jadikan Kapital
+                // Contoh: "9 Honest - Nazlul" -> "HONEST - NAZLUL"
+                namaStr = namaStr.replace(/^[^a-zA-Z]+/, '').trim().toUpperCase();
+
+                // Bersihkan Rekening: Ambil nama bank di awal dan susunan angka di paling akhir
+                // Contoh: "BANK BRI: *****x*xxx+()]68" -> "BANK BRI: ************0168"
+                var ekstrakRek = rekStr.match(/([A-Za-z\s]+).*?(\d{3,8})\$/);
+                if (ekstrakRek) {
+                    var namaBank = ekstrakRek[1].trim();
+                    var digitAkhir = ekstrakRek[2];
+                    rekStr = namaBank + ": ************" + digitAkhir;
+                } else {
+                    // Jika formatnya meleset sama sekali, cukup ubah simbol aneh jadi bintang
+                    rekStr = rekStr.replace(/[^A-Za-z0-9\:\s\-]/g, '*').replace(/\*+/g, '****');
+                }
+
+                // --- MENYUSUN TEMPLATE RAWBT ---
+                var template = 
+`<c><b><w><h>AGEN WPA SHOP</h></w></b></c>
+<c>GROSIR</c>
+<c>jatisari, senori, tuban</c>
+<c>${waktuStr}</c>
+================================
+No Rek  : ${rekStr}
+Nama    : ${namaStr}
+Jumlah  : ${nominalStr}
+Status  : SUKSES
+================================
+<c>TERIMAKASIH</c>`;
+
+                textArea.value = template;
+                
+                statusElemen.style.color = '#28a745';
+                statusElemen.innerText = "Selesai! Teks berhasil dirapikan otomatis.";
+                btnCetak.disabled = false;
+            }).catch(function(err) {
+                statusElemen.style.color = 'red';
+                statusElemen.innerText = "Gagal memproses gambar.";
+                console.error(err);
+                btnCetak.disabled = false;
+            });
+        }
+
+        function cetakKeRawBT() {
+            var text = document.getElementById('strukText').value;
+            var printData = text + "\n\n\n";
+            var intentUrl = "intent:" + encodeURIComponent(printData) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;";
+            window.location.href = intentUrl;
+        }
+    </script>
+</body>
+</html>
