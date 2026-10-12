@@ -83,7 +83,7 @@
         }
         textarea {
             width: 100%;
-            height: 330px;
+            height: 350px;
             font-family: 'Courier New', Courier, monospace; /* Wajib monospace agar spasi sejajar */
             font-size: 14px;
             padding: 10px;
@@ -189,8 +189,9 @@ Teks akan diekstrak ke sini...
                 var rekStr = "............";
                 var nominalStr = "Rp ........";
                 var waktuStr = "............";
+                var noTransStr = "............"; // Variabel baru untuk No Transaksi
 
-                // LOGIKA PEMBACAAN TEKS NOTA SEABANK
+                // LOGIKA PEMBACAAN TEKS NOTA
                 for (var i = 0; i < barisTeks.length; i++) {
                     var line = barisTeks[i];
 
@@ -214,7 +215,18 @@ Teks akan diekstrak ke sini...
                         }
                     }
 
-                    // 3. Ambil Nama (dari kata "Ke") & Rekening
+                    // 3. Ambil No. Transaksi
+                    if (line.toLowerCase().includes("no. transaksi") || line.toLowerCase().includes("no transaksi")) {
+                        var hapusLabel = line.replace(/no\.?\s*transaksi/i, '').trim();
+                        // Biasanya sisa teks adalah nomor panjang
+                        if (hapusLabel.length > 5) {
+                            noTransStr = hapusLabel;
+                        } else if (i + 1 < barisTeks.length) {
+                            noTransStr = barisTeks[i+1];
+                        }
+                    }
+
+                    // 4. Ambil Nama (dari kata "Ke") & Rekening
                     if (line === "Ke" || line.startsWith("Ke ")) {
                         var sisaText = line.substring(2).trim();
                         if (sisaText.length > 2) {
@@ -223,6 +235,7 @@ Teks akan diekstrak ke sini...
                             namaStr = barisTeks[i+1];
                         }
                         
+                        // Mencari baris bank & rekening di bawah nama
                         for (var j = 1; j <= 2; j++) {
                             if (i + j < barisTeks.length) {
                                 var rekLine = barisTeks[i+j];
@@ -238,10 +251,14 @@ Teks akan diekstrak ke sini...
                 // ==========================================
                 // FILTER PEMBERSIH (Data Cleaning)
                 // ==========================================
+                
                 // Menghilangkan logo/angka di depan nama
                 namaStr = namaStr.replace(/^[^a-zA-Z]+/, '').trim().toUpperCase();
 
-                // Merapikan simbol bintang pada rekening yang sering salah baca
+                // Membersihkan nomor transaksi agar hanya mengambil angka dan huruf saja
+                noTransStr = noTransStr.replace(/[^a-zA-Z0-9]/g, '');
+
+                // Merapikan simbol bintang pada rekening
                 var ekstrakRek = rekStr.match(/([A-Za-z\s]+).*?(\d{3,8})\$/);
                 if (ekstrakRek) {
                     var namaBank = ekstrakRek[1].trim();
@@ -252,16 +269,17 @@ Teks akan diekstrak ke sini...
                 }
 
                 // --- MENYUSUN TEMPLATE TEKS MURNI ---
-                // Header dan Footer otomatis rata tengah menggunakan Spasi
+                // "No Rek" diganti dengan "Ke", dan penambahan "No Trans"
                 var template = 
 `${rataTengah("AGEN WPA SHOP")}
 ${rataTengah("GROSIR")}
 ${rataTengah("jatisari, senori, tuban")}
 ${rataTengah(waktuStr)}
 ================================
-No Rek  : ${rekStr}
+Ke      : ${rekStr}
 Nama    : ${namaStr}
 Jumlah  : ${nominalStr}
+No Trans: ${noTransStr}
 Status  : SUKSES
 ================================
 ${rataTengah("TERIMAKASIH")}`;
